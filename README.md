@@ -8,11 +8,14 @@
 
 A neon arcade space harvester, built for make.fun's [best-game-01](https://make.fun/bounty/best-game-01) bounty. Pilot the harvester ship *Lumen* through a dying nebula: collect starshards, blast void mites, chain combos, and survive the waves.
 
+**Win the game: clear all 10 waves and the nova is restored.** After every cleared wave, pick 1 of 3 upgrades — faster fire, reinforced hull, split bolts, or a shard magnet — and build Lumen your way, wave by wave.
+
 ## How to play
 
 - **Move** — mouse, or WASD / arrow keys
 - **Fire** — Space or mouse click
 - **Pause** — P · **Mute** — M · **Restart** — R · **Start** — Enter
+- **Choose an upgrade** — keys 1 / 2 / 3, or click a card
 - Collect starshards to build your combo multiplier (up to x8). Shoot mites, weavers and bulwarks. Grab power-ups: Aegis shield, Magnet, Overdrive. You have 3 hull — a hit costs one and breaks your combo. Clear each wave to advance; the nebula only gets faster.
 
 ## Run it
