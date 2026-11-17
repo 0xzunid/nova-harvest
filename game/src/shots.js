@@ -1,19 +1,21 @@
-// The screenshot scenes behind ?shot=start|play|clear|end&seed=N. Each one
-// plays the real rules forward from a fresh world, steered by a simple
-// autopilot (chase the nearest shard, sidestep anything diving at the ship,
-// fire the whole time), so the frame is what a short game really looks like
-// and the same seed always gives the same frame. Painted through the exact
-// render path normal play uses.
+// The screenshot scenes behind ?shot=start|play|clear|end&seed=N. The start
+// and clear scenes play the real rules forward from a fresh world, steered
+// by a simple autopilot (chase the nearest shard, sidestep anything diving
+// at the ship, fire the whole time). The play scene stages a busy wave-4
+// moment with the world's own staging helper — real entities, real state,
+// painted through the exact render path normal play uses — then flies the
+// autopilot briefly so bolts are in the air. The end scene plays a good
+// opening, then takes the victory the same way the real wave-10 clear does.
+// The same seed always gives the same frame.
 
 import { FIELD, SCREEN, STEP } from './config.js';
-import { EVENT_OVER, EVENT_WAVE_CLEAR } from './world.js';
+import { EVENT_WAVE_CLEAR } from './world.js';
 import { clamp } from './random.js';
 
 const START_SECONDS = 3;
-const PLAY_SECONDS = 4.5; // ~4 s of live play, per the bounty spec — long enough to be mid-action
+const PLAY_SECONDS = 1.2; // brief live flight after the wave-4 staging
 const CLEAR_LIMIT_SECONDS = 45;
-const END_GOOD_SECONDS = 8;
-const END_LIMIT_SECONDS = 90;
+const END_PLAY_SECONDS = 40; // a strong real opening before the staged win
 
 /** Fake input the world can step against: mouse target + always firing. */
 function makePilotInput() {
@@ -104,8 +106,10 @@ function runSteps(world, pilot, seconds, reckless, stopOn) {
 export function stageShot(name, world) {
   const pilot = makePilotInput();
   if (name === 'play') {
-    world.reset();
-    world.startGame();
+    // Wave 4, mid-fight: a bulwark, weavers and mites already in the
+    // field, shards and a power-up on screen, combo x6, split bolts
+    // flying — the game at its busiest, not an empty first wave.
+    world.stageBusyWave(4);
     runSteps(world, pilot, PLAY_SECONDS, false, 0);
     const over = world.state.screen === SCREEN.GAME_OVER;
     return { screen: over ? SCREEN.GAME_OVER : SCREEN.PLAYING, best: world.state.best };
@@ -114,24 +118,28 @@ export function stageShot(name, world) {
     world.reset();
     world.startGame();
     runSteps(world, pilot, CLEAR_LIMIT_SECONDS, false, EVENT_WAVE_CLEAR);
-    if (world.state.screen !== SCREEN.WAVE_CLEAR) {
-      // The pilot ran out of time: clear the wave by the book anyway, so the
-      // banner frame is always the wave-clear banner.
+    if (world.state.screen !== SCREEN.UPGRADE) {
+      // The pilot ran out of time: clear the wave by the book anyway, so
+      // the frame is always the upgrade-choice screen.
       world.forceWaveClear();
     }
-    return { screen: SCREEN.WAVE_CLEAR, best: world.state.best };
+    return { screen: SCREEN.UPGRADE, best: world.state.best };
   }
   if (name === 'end') {
     world.reset();
     world.startGame();
-    // A good opening builds a plausible score, then the pilot stops dodging
-    // and stops firing, so the mites catch the ship like they would a
-    // hurried player.
-    runSteps(world, pilot, END_GOOD_SECONDS, false, 0);
-    pilot.firing = false;
-    runSteps(world, pilot, END_LIMIT_SECONDS, true, EVENT_OVER);
-    if (world.state.screen !== SCREEN.GAME_OVER) world.forceGameOver();
-    return { screen: SCREEN.GAME_OVER, best: world.state.best };
+    // Play a strong opening for real — clear wave 1, take the first
+    // upgrade on offer, keep flying — then the nova is restored the way
+    // clearing wave 10 restores it. The score is really earned.
+    const steps = Math.floor(END_PLAY_SECONDS / STEP);
+    for (let i = 0; i < steps; i += 1) {
+      autopilot(world.state, pilot, false);
+      world.step(STEP, pilot);
+      if (world.state.screen === SCREEN.UPGRADE) world.chooseUpgrade(0);
+      if (world.state.screen === SCREEN.GAME_OVER) break;
+    }
+    world.forceVictory();
+    return { screen: SCREEN.VICTORY, best: world.state.best };
   }
   // start (default): title screen, drifting shards behind it.
   world.reset();

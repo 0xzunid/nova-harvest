@@ -57,12 +57,19 @@ export function createParticles() {
       spawn(x + (Math.random() - 0.5) * 6, y, (Math.random() - 0.5) * 30, 90 + vy + Math.random() * 40, 0.3 + Math.random() * 0.2, 2 + Math.random() * 2.5, Math.random() < 0.5 ? PALETTE.cyan : '#7df9ff', 0.92);
     },
     addText(x, y, text, color = PALETTE.text, size = 18) {
+      // Stack a new popup above any live one near the same spot, so a
+      // burst of kills never prints its scores on top of each other.
+      let sy = y;
+      for (let i = 0; i < MAX_TEXTS; i += 1) {
+        const t = texts[i];
+        if (t.alive && Math.abs(t.x - x) < 70 && Math.abs(t.y - sy) < 26) sy -= 26;
+      }
       for (let i = 0; i < MAX_TEXTS; i += 1) {
         const t = texts[i];
         if (t.alive) continue;
         t.alive = true;
         t.x = x;
-        t.y = y;
+        t.y = sy;
         t.vy = -46;
         t.life = 1.1;
         t.maxLife = 1.1;

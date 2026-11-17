@@ -11,12 +11,18 @@ export const SCREEN = {
   TITLE: 'title',
   PLAYING: 'playing',
   PAUSED: 'paused',
-  WAVE_CLEAR: 'wave-clear',
+  UPGRADE: 'upgrade',
+  VICTORY: 'victory',
   GAME_OVER: 'game-over',
 };
 
+/** Clear this many waves and the nova is restored: the win condition. */
+export const FINAL_WAVE = 10;
+/** The most hull the ship can carry (upgrades can raise it past the start). */
+export const MAX_HULL = 5;
+
 export const PLAYER = {
-  radius: 22,
+  radius: 26,
   keyboardSpeed: 540,
   mouseFollow: 14, // lerp rate toward the mouse, per second
   fireCooldown: 0.22,
@@ -26,33 +32,33 @@ export const PLAYER = {
   startY: 600,
 };
 
-export const BOLT = { speed: 760, radius: 6, length: 26 };
+export const BOLT = { speed: 760, radius: 7, length: 30 };
 
 export const LIVES = 3;
 export const COMBO_WINDOW = 3.0; // seconds without a pickup/kill before the combo dies
 export const COMBO_MAX = 8;
 
 export const ENEMY = {
-  mite: { radius: 20, hp: 1, baseSpeed: 95, speedPerWave: 9, points: 50 },
-  weaver: { radius: 24, hp: 2, baseSpeed: 75, speedPerWave: 7, points: 100 },
-  bulwark: { radius: 42, hp: 4, baseSpeed: 46, speedPerWave: 4, points: 250 },
+  mite: { radius: 24, hp: 1, baseSpeed: 95, speedPerWave: 9, points: 50 },
+  weaver: { radius: 29, hp: 2, baseSpeed: 75, speedPerWave: 7, points: 100 },
+  bulwark: { radius: 50, hp: 4, baseSpeed: 46, speedPerWave: 4, points: 250 },
 };
 
-export const SHARD = { radius: 13, baseSpeed: 120, points: 25, spawnInterval: 0.85 };
+export const SHARD = { radius: 15, baseSpeed: 120, points: 25, spawnInterval: 0.85 };
 
 export const POWERUP = {
-  radius: 18,
+  radius: 21,
   fallSpeed: 90,
   duration: 8.0, // magnet + overdrive, in seconds; aegis lasts until it absorbs a hit
   dropChance: 0.08, // from mites / weavers (bulwarks always drop one)
 };
 
 export const WAVE = {
-  mitesBase: 6,
+  mitesBase: 8,
   mitesPerWave: 3,
   weaversPerWave: 2, // from wave 2: 2 + (n - 2)
   bulwarkEvery: 2, // from wave 4: one bulwark per two waves
-  spawnInterval: 0.95, // seconds between spawns on wave 1
+  spawnInterval: 0.7, // seconds between spawns on wave 1
   spawnScale: 0.9, // multiplied per wave
   minSpawnInterval: 0.26,
   clearBonusPerWave: 150,

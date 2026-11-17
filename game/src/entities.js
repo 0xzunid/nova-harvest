@@ -15,13 +15,15 @@ export function createPlayer() {
     y: 600,
     vx: 0,
     vy: 0,
-    radius: 22,
+    radius: 26,
     tilt: 0, // banking angle, eased toward the horizontal velocity
     fireTimer: 0,
     invuln: 0,
     shield: false,
     trailTimer: 0,
     alive: true,
+    fireRateMul: 1, // RAPID CYCLER upgrades multiply this down
+    boltCount: 1, // SPLIT BOLTS upgrades raise this to 3
   };
 }
 
@@ -61,6 +63,7 @@ export function updatePlayer(player, dt, move, spawnTrail) {
 export function drawPlayer(g, player, time) {
   g.save();
   g.translate(player.x, player.y);
+  g.scale(1.2, 1.2); // the hull art is drawn at fixed size; the scale is the 1.25x ship
   // Blink while invulnerable: the ship is there, but untouchable.
   if (player.invuln > 0 && Math.floor(time * 14) % 2 === 0) g.globalAlpha = 0.35;
   g.rotate(player.tilt);
@@ -128,13 +131,14 @@ export function drawPlayer(g, player, time) {
 
 // ---------------------------------------------------------------- bolts
 
-export function createBolt(x, y) {
-  return { kind: 'bolt', x, y, vx: 0, vy: -BOLT.speed, radius: BOLT.radius, alive: true };
+export function createBolt(x, y, vx = 0) {
+  return { kind: 'bolt', x, y, vx, vy: -BOLT.speed, radius: BOLT.radius, alive: true };
 }
 
 export function updateBolt(bolt, dt) {
+  bolt.x += bolt.vx * dt;
   bolt.y += bolt.vy * dt;
-  if (bolt.y < -30) bolt.alive = false;
+  if (bolt.y < -30 || bolt.x < -30 || bolt.x > FIELD.width + 30) bolt.alive = false;
 }
 
 export function drawBolt(g, bolt) {
@@ -235,20 +239,27 @@ export function drawEnemy(g, e, time) {
     g.arc(6, 4, 3, 0, Math.PI * 2);
     g.fill();
   } else if (e.kind === 'weaver') {
+    // Weaver: a swept-wing dart — nothing like the mite's spiky ball or the
+    // bulwark's hexagon. Wide wings, narrow spine, violet with a hot core.
     g.rotate(Math.sin(time * 1.6 + e.phase) * 0.5);
     g.shadowColor = PALETTE.violet;
     g.shadowBlur = 18;
     g.fillStyle = flash ? '#ffffff' : '#7c4dff';
     g.beginPath();
-    // Crescent body.
-    g.arc(0, 0, e.radius, Math.PI * 0.15, Math.PI * 1.85);
-    g.arc(6, -4, e.radius * 0.72, Math.PI * 1.8, Math.PI * 0.2, true);
+    g.moveTo(0, -e.radius);
+    g.lineTo(e.radius * 0.55, -e.radius * 0.1);
+    g.lineTo(e.radius * 1.1, e.radius * 0.7);
+    g.lineTo(e.radius * 0.38, e.radius * 0.42);
+    g.lineTo(0, e.radius * 0.78);
+    g.lineTo(-e.radius * 0.38, e.radius * 0.42);
+    g.lineTo(-e.radius * 1.1, e.radius * 0.7);
+    g.lineTo(-e.radius * 0.55, -e.radius * 0.1);
     g.closePath();
     g.fill();
     g.shadowBlur = 0;
     g.fillStyle = '#ffffff';
     g.beginPath();
-    g.arc(0, 2, 4, 0, Math.PI * 2);
+    g.arc(0, -2, 4.5, 0, Math.PI * 2);
     g.fill();
   } else {
     // Bulwark: armoured hexagon with a glowing core and a health ring.
@@ -320,6 +331,7 @@ export function updateShard(s, dt, time, player, magnet) {
 export function drawShard(g, s, time) {
   g.save();
   g.translate(s.x, s.y);
+  g.scale(1.15, 1.15); // shards read bigger beside the scaled-up ship
   const spin = Math.sin(time * 3 + s.phase) * 0.5;
   g.rotate(spin * 0.4);
   g.shadowColor = PALETTE.gold;

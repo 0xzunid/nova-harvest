@@ -8,7 +8,9 @@ import {
   COMBO_MAX,
   COMBO_WINDOW,
   FIELD,
+  FINAL_WAVE,
   LIVES,
+  MAX_HULL,
   PALETTE,
   PLAYER,
   POOL,
@@ -20,6 +22,7 @@ import {
 import { createRandom, clamp, dist2, shuffle } from './random.js';
 import { createAudio } from './audio.js';
 import { createParticles } from './particles.js';
+import { applyUpgrade, rollOffer } from './upgrades.js';
 import {
   createBolt,
   createBulwark,
@@ -63,13 +66,16 @@ export function createWorld(rng) {
     combo: 0, // chained pickups/kills since the last hit
     comboTimer: 0,
     multiplier: 1,
-    waveBannerTimer: 0,
     waveBonus: 0,
     spawnQueue: [], // kinds waiting to be spawned this wave
     spawnTimer: 0,
     shardTimer: 0,
     magnetTimer: 0,
     overdriveTimer: 0,
+    offer: null, // the 3 upgrades on offer after a cleared wave, else null
+    upgrades: [], // ids of upgrades already picked this run
+    magnetAlways: false, // SHARD MAGNET upgrade: shards always drift to Lumen
+    maxHull: MAX_HULL,
     bolts: [],
     enemies: [],
     shards: [],
@@ -139,13 +145,13 @@ export function createWorld(rng) {
     );
   }
 
-  function spawnEnemy(kind) {
+  function spawnEnemy(kind, y) {
     const x = rng.range(50, FIELD.width - 50);
-    const y = -40;
+    const sy = y === undefined ? -40 : y;
     let fresh = null;
-    if (kind === 'mite') fresh = createMite(x, y, state.wave, rng);
-    else if (kind === 'weaver') fresh = createWeaver(x, y, state.wave, rng);
-    else fresh = createBulwark(x, y, state.wave, rng);
+    if (kind === 'mite') fresh = createMite(x, sy, state.wave, rng);
+    else if (kind === 'weaver') fresh = createWeaver(x, sy, state.wave, rng);
+    else fresh = createBulwark(x, sy, state.wave, rng);
     alloc(state.enemies, fresh);
   }
 
@@ -179,8 +185,13 @@ export function createWorld(rng) {
 
   function fireBolt() {
     if (player.fireTimer > 0) return;
-    player.fireTimer = state.overdriveTimer > 0 ? PLAYER.overdriveCooldown : PLAYER.fireCooldown;
-    alloc(state.bolts, createBolt(player.x, player.y - 26));
+    player.fireTimer = (state.overdriveTimer > 0 ? PLAYER.overdriveCooldown : PLAYER.fireCooldown) * (player.fireRateMul ?? 1);
+    // SPLIT BOLTS: extra bolts fan out from the nose.
+    const n = player.boltCount ?? 1;
+    for (let i = 0; i < n; i += 1) {
+      const vx = (i - (n - 1) / 2) * 170;
+      alloc(state.bolts, createBolt(player.x, player.y - 26, vx));
+    }
     audio.shoot();
   }
 
@@ -255,13 +266,16 @@ export function createWorld(rng) {
     state.combo = 0;
     state.comboTimer = 0;
     state.multiplier = 1;
-    state.waveBannerTimer = 0;
     state.waveBonus = 0;
     state.spawnQueue = [];
     state.spawnTimer = 0;
     state.shardTimer = 0;
     state.magnetTimer = 0;
     state.overdriveTimer = 0;
+    state.offer = null;
+    state.upgrades = [];
+    state.magnetAlways = false;
+    state.maxHull = MAX_HULL;
     for (const list of [state.bolts, state.enemies, state.shards, state.powerups]) {
       for (const item of list) item.alive = false;
     }
@@ -337,7 +351,7 @@ export function createWorld(rng) {
     }
 
     // Shards + power-ups.
-    const magnet = state.magnetTimer > 0;
+    const magnet = state.magnetTimer > 0 || state.magnetAlways;
     for (const s of state.shards) {
       if (s.alive) updateShard(s, dt, state.time, player, magnet);
     }
@@ -421,26 +435,37 @@ export function createWorld(rng) {
       if (!anyAlive) {
         state.waveBonus = WAVE.clearBonusPerWave * state.wave;
         state.score += state.waveBonus;
-        state.screen = SCREEN.WAVE_CLEAR;
-        state.waveBannerTimer = 2.4;
         audio.fanfare();
+        if (state.wave >= FINAL_WAVE) {
+          // The win: all ten waves cleared, the nova is restored.
+          // The field clears with it — a clean frame for the victory screen.
+          particles.clear();
+          state.screen = SCREEN.VICTORY;
+          if (state.score > state.best) {
+            state.best = state.score;
+            saveBest(state.best);
+          }
+          return events | EVENT_WAVE_CLEAR;
+        }
+        // Between waves the pilot picks 1 of 3 upgrades, then the next
+        // wave starts. The choice is the run's build, wave by wave.
+        state.offer = rollOffer(rng, state);
+        state.screen = SCREEN.UPGRADE;
         return events | EVENT_WAVE_CLEAR;
       }
     }
     return events;
   }
 
-  function stepWaveClear(dt) {
-    state.time += dt;
-    state.waveBannerTimer -= dt;
-    // The field keeps drifting behind the banner.
-    for (const s of state.shards) if (s.alive) updateShard(s, dt, state.time, player, false);
-    particles.update(dt);
-    if (state.waveBannerTimer <= 0) {
-      state.screen = SCREEN.PLAYING;
-      startWave(state.wave + 1);
-    }
-    return 0;
+  /** Take one of the offered upgrades (index 0-2) and start the next wave. */
+  function chooseUpgrade(index) {
+    if (state.screen !== SCREEN.UPGRADE || !state.offer) return;
+    const picked = state.offer[index];
+    if (!picked) return;
+    applyUpgrade(state, picked.id);
+    state.offer = null;
+    state.screen = SCREEN.PLAYING;
+    startWave(state.wave + 1);
   }
 
   function step(dt, input) {
@@ -449,8 +474,7 @@ export function createWorld(rng) {
       return 0;
     }
     if (state.screen === SCREEN.PLAYING) return stepPlaying(dt, input);
-    if (state.screen === SCREEN.WAVE_CLEAR) return stepWaveClear(dt);
-    // PAUSED and GAME_OVER: particles settle, nothing else moves.
+    // PAUSED, UPGRADE, VICTORY and GAME_OVER: particles settle, nothing else moves.
     particles.update(dt);
     return 0;
   }
@@ -474,14 +498,67 @@ export function createWorld(rng) {
     drawEntities,
     startWave,
     spawnShard,
+    chooseUpgrade,
+    // Stage a busy mid-wave moment for the play screenshot: deal most of
+    // the wave's spawns into the field at staggered depths, scatter shards
+    // and a power-up, set a plausible score and combo, then fly the
+    // autopilot briefly so bolts are in the air. All of it is real game
+    // state painted through the normal render path.
+    stageBusyWave(n) {
+      reset();
+      state.screen = SCREEN.PLAYING;
+      state.wave = n;
+      state.score = 1200 + n * 450;
+      state.combo = 16;
+      state.comboTimer = COMBO_WINDOW;
+      state.multiplier = 6;
+      state.hull = 3;
+      // The staged pilot already picked two upgrades on earlier waves.
+      applyUpgrade(state, 'rapid');
+      applyUpgrade(state, 'split');
+      buildWave(n);
+      // Guarantee the shot shows every enemy kind: one bulwark and two
+      // weavers, placed where they read whole, then fill the field from
+      // the shuffled queue.
+      const take = (kind) => {
+        const i = state.spawnQueue.indexOf(kind);
+        if (i >= 0) state.spawnQueue.splice(i, 1);
+      };
+      take('bulwark');
+      spawnEnemy('bulwark', rng.range(200, 400));
+      take('weaver');
+      spawnEnemy('weaver', rng.range(150, 500));
+      take('weaver');
+      spawnEnemy('weaver', rng.range(150, 500));
+      const pre = Math.floor(state.spawnQueue.length * 0.6);
+      for (let i = 0; i < pre; i += 1) {
+        const kind = state.spawnQueue.shift();
+        spawnEnemy(kind, rng.range(90, 330));
+      }
+      for (let i = 0; i < 7; i += 1) {
+        spawnShard(rng.range(60, FIELD.width - 60), rng.range(110, 420));
+      }
+      alloc(state.powerups, createPowerUp(rng.range(300, 980), 200, 'magnet', rng));
+    },
     // Test/shot helpers: force a wave-clear or game-over state without playing.
     forceWaveClear() {
       for (const e of state.enemies) e.alive = false;
       state.spawnQueue = [];
       state.waveBonus = WAVE.clearBonusPerWave * state.wave;
       state.score += state.waveBonus;
-      state.screen = SCREEN.WAVE_CLEAR;
-      state.waveBannerTimer = 2.4;
+      state.offer = rollOffer(rng, state);
+      state.screen = SCREEN.UPGRADE;
+    },
+    forceVictory() {
+      for (const e of state.enemies) e.alive = false;
+      state.spawnQueue = [];
+      state.wave = FINAL_WAVE;
+      particles.clear();
+      state.screen = SCREEN.VICTORY;
+      if (state.score > state.best) {
+        state.best = state.score;
+        saveBest(state.best);
+      }
     },
     forceGameOver() {
       state.hull = 0;

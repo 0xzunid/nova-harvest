@@ -7,6 +7,10 @@ export const ACTION_CONFIRM = 1;
 export const ACTION_PAUSE = 2;
 export const ACTION_MUTE = 4;
 export const ACTION_RESTART = 8;
+export const ACTION_CHOICE_1 = 16;
+export const ACTION_CHOICE_2 = 32;
+export const ACTION_CHOICE_3 = 64;
+export const ACTION_CLICK = 128;
 
 const KEY_ACTIONS = {
   Enter: ACTION_CONFIRM,
@@ -15,6 +19,12 @@ const KEY_ACTIONS = {
   Escape: ACTION_PAUSE,
   KeyM: ACTION_MUTE,
   KeyR: ACTION_RESTART,
+  Digit1: ACTION_CHOICE_1,
+  Digit2: ACTION_CHOICE_2,
+  Digit3: ACTION_CHOICE_3,
+  Numpad1: ACTION_CHOICE_1,
+  Numpad2: ACTION_CHOICE_2,
+  Numpad3: ACTION_CHOICE_3,
 };
 
 export function createInput(canvas) {
@@ -57,7 +67,7 @@ export function createInput(canvas) {
   function onMouseDown(event) {
     toLogical(event);
     mouseDown = true;
-    actions |= ACTION_CONFIRM;
+    actions |= ACTION_CONFIRM | ACTION_CLICK;
   }
 
   function onMouseUp() {
@@ -69,7 +79,7 @@ export function createInput(canvas) {
     const touch = event.touches[0];
     if (touch) toLogical(touch);
     mouseDown = true;
-    actions |= ACTION_CONFIRM;
+    actions |= ACTION_CONFIRM | ACTION_CLICK;
     event.preventDefault();
   }
 

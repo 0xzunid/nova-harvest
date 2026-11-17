@@ -23,21 +23,25 @@ function makeStars(seed, count, sizeMin, sizeMax) {
   return stars;
 }
 
-// Nebula blobs: fixed positions, drawn as soft radial gradients.
+// Nebula blobs: fixed positions, drawn as soft radial gradients. The dying
+// nova's gold glow hangs over the top of the field; violet and teal anchor
+// the corners so the black never reads empty.
 const NEBULAE = [
-  { x: 220, y: 150, r: 340, color: 'rgba(91, 42, 157, 0.55)' },
-  { x: 1080, y: 120, r: 300, color: 'rgba(161, 32, 110, 0.42)' },
-  { x: 980, y: 600, r: 360, color: 'rgba(14, 74, 110, 0.5)' },
-  { x: 180, y: 620, r: 260, color: 'rgba(91, 42, 157, 0.38)' },
-  { x: 640, y: 360, r: 420, color: 'rgba(40, 16, 90, 0.35)' },
+  { x: 220, y: 150, r: 340, color: 'rgba(91, 42, 157, 0.6)' },
+  { x: 1080, y: 120, r: 300, color: 'rgba(161, 32, 110, 0.48)' },
+  { x: 980, y: 600, r: 360, color: 'rgba(14, 74, 110, 0.55)' },
+  { x: 180, y: 620, r: 260, color: 'rgba(91, 42, 157, 0.44)' },
+  { x: 640, y: 360, r: 420, color: 'rgba(40, 16, 90, 0.4)' },
+  { x: 640, y: 90, r: 300, color: 'rgba(255, 209, 102, 0.15)' },
+  { x: 420, y: 480, r: 300, color: 'rgba(91, 42, 157, 0.45)' },
 ];
 
 export function createRenderer(canvas) {
   const g = canvas.getContext('2d');
   const layers = [
-    { stars: makeStars(101, 110, 0.6, 1.4), speed: 6, alpha: 0.55 },
-    { stars: makeStars(202, 70, 1.0, 2.0), speed: 16, alpha: 0.8 },
-    { stars: makeStars(303, 36, 1.4, 2.8), speed: 34, alpha: 1.0 },
+    { stars: makeStars(101, 150, 0.6, 1.4), speed: 6, alpha: 0.55 },
+    { stars: makeStars(202, 95, 1.0, 2.0), speed: 16, alpha: 0.8 },
+    { stars: makeStars(303, 50, 1.4, 2.8), speed: 34, alpha: 1.0 },
   ];
 
   function drawBackground(state) {
@@ -79,8 +83,8 @@ export function createRenderer(canvas) {
     g.fillRect(0, FIELD.height - 140, FIELD.width, 140);
   }
 
-  function drawHullIcons(x, y, hull) {
-    for (let i = 0; i < 3; i += 1) {
+  function drawHullIcons(x, y, hull, maxHull) {
+    for (let i = 0; i < maxHull; i += 1) {
       const cx = x + i * 30;
       g.save();
       g.translate(cx, y);
@@ -189,7 +193,7 @@ export function createRenderer(canvas) {
     g.fillStyle = PALETTE.muted;
     g.font = `600 14px ${FONT}`;
     g.fillText('HULL', FIELD.width - 28, 36);
-    drawHullIcons(FIELD.width - 28 - 60, 62, state.hull);
+    drawHullIcons(FIELD.width - 28 - (state.maxHull - 1) * 30, 62, state.hull, state.maxHull);
 
     // Combo, bottom-left — only while a streak is alive.
     if (state.combo > 0 && state.comboTimer > 0) {
@@ -258,17 +262,20 @@ export function createRenderer(canvas) {
     g.fillText('Harvest the dying light.', FIELD.width / 2, 322);
     g.shadowBlur = 0;
 
-    panel(390, 368, 500, 168);
+    panel(390, 366, 500, 178);
     g.textAlign = 'center';
     g.fillStyle = PALETTE.text;
     g.font = `600 19px ${FONT}`;
-    g.fillText('Mouse or WASD / arrows — fly Lumen', FIELD.width / 2, 402);
-    g.fillText('Space or click — fire bolts', FIELD.width / 2, 434);
+    g.fillText('Mouse or WASD / arrows — fly Lumen', FIELD.width / 2, 400);
+    g.fillText('Space or click — fire bolts', FIELD.width / 2, 431);
     g.font = `600 16px ${FONT}`;
-    g.fillText('Collect starshards · Blast void mites · Chain combos to x8', FIELD.width / 2, 466);
+    g.fillText('Collect starshards · Blast void mites · Chain combos to x8', FIELD.width / 2, 461);
+    g.fillStyle = PALETTE.gold;
+    g.font = `bold 17px ${FONT}`;
+    g.fillText('10 waves. Clear them all to restore the nova.', FIELD.width / 2, 491);
     g.fillStyle = PALETTE.muted;
     g.font = `600 16px ${FONT}`;
-    g.fillText('P pause · M mute · R restart', FIELD.width / 2, 506);
+    g.fillText('P pause · M mute · R restart', FIELD.width / 2, 521);
 
     if (best > 0) {
       g.fillStyle = PALETTE.gold;
@@ -296,25 +303,108 @@ export function createRenderer(canvas) {
     g.fillText('P or Enter — resume · R — restart', FIELD.width / 2, 400);
   }
 
-  function drawWaveClear(state) {
-    // Banner across the middle; the field keeps drifting behind it.
-    g.save();
-    g.fillStyle = 'rgba(4, 6, 18, 0.45)';
-    g.fillRect(0, 252, FIELD.width, 150);
-    g.strokeStyle = 'rgba(255, 209, 102, 0.6)';
-    g.lineWidth = 2;
-    g.beginPath();
-    g.moveTo(0, 252);
-    g.lineTo(FIELD.width, 252);
-    g.moveTo(0, 402);
-    g.lineTo(FIELD.width, 402);
-    g.stroke();
-    titleText(`WAVE ${state.wave} CLEARED`, 306, 52, PALETTE.gold, PALETTE.gold);
+  // The three upgrade cards: same geometry the renderer paints and the
+  // input handler clicks. Exported so main.js can hit-test a mouse click.
+  function upgradeCardRects() {
+    const w = 300;
+    const h = 210;
+    const gap = 40;
+    const total = w * 3 + gap * 2;
+    const x0 = (FIELD.width - total) / 2;
+    const y = 258;
+    return [0, 1, 2].map((i) => ({ x: x0 + i * (w + gap), y, w, h }));
+  }
+
+  function drawUpgrade(state) {
+    // The field keeps drifting behind the choice; the dim keeps it readable.
+    g.fillStyle = 'rgba(4, 6, 18, 0.5)';
+    g.fillRect(0, 0, FIELD.width, FIELD.height);
+    titleText(`WAVE ${state.wave} CLEARED`, 118, 48, PALETTE.gold, PALETTE.gold);
     g.textAlign = 'center';
     g.fillStyle = PALETTE.text;
+    g.font = `bold 22px ${FONT}`;
+    g.fillText(`Wave bonus  +${state.waveBonus}`, FIELD.width / 2, 168);
+    g.fillStyle = PALETTE.cyan;
     g.font = `bold 24px ${FONT}`;
-    g.fillText(`Wave bonus  +${state.waveBonus}`, FIELD.width / 2, 362);
-    g.restore();
+    g.shadowColor = PALETTE.cyan;
+    g.shadowBlur = 12;
+    g.fillText('CHOOSE AN UPGRADE', FIELD.width / 2, 214);
+    g.shadowBlur = 0;
+
+    const rects = upgradeCardRects();
+    (state.offer || []).forEach((u, i) => {
+      const r = rects[i];
+      g.save();
+      g.fillStyle = 'rgba(10, 14, 38, 0.85)';
+      g.strokeStyle = u.color;
+      g.lineWidth = 2;
+      g.shadowColor = u.color;
+      g.shadowBlur = 16;
+      g.beginPath();
+      g.roundRect(r.x, r.y, r.w, r.h, 16);
+      g.fill();
+      g.stroke();
+      g.shadowBlur = 0;
+      g.textAlign = 'center';
+      g.fillStyle = u.color;
+      g.font = `bold 18px ${FONT}`;
+      g.fillText(`press ${i + 1}`, r.x + r.w / 2, r.y + 36);
+      g.fillStyle = PALETTE.text;
+      g.font = `bold 24px ${FONT}`;
+      g.fillText(u.name, r.x + r.w / 2, r.y + 96);
+      g.fillStyle = PALETTE.muted;
+      g.font = `600 17px ${FONT}`;
+      g.fillText(u.desc, r.x + r.w / 2, r.y + 134);
+      g.fillStyle = u.color;
+      g.font = `bold 15px ${FONT}`;
+      g.fillText('— or click the card —', r.x + r.w / 2, r.y + 172);
+      g.restore();
+    });
+
+    g.textAlign = 'center';
+    g.fillStyle = PALETTE.muted;
+    g.font = `600 16px ${FONT}`;
+    g.fillText('Each upgrade stays for the whole run — build Lumen your way.', FIELD.width / 2, 530);
+  }
+
+  function drawVictory(state) {
+    dim();
+    // The nova burns again: gold over cyan, the opposite of SIGNAL LOST red.
+    const glow = g.createRadialGradient(640, 190, 0, 640, 190, 300);
+    glow.addColorStop(0, 'rgba(255, 209, 102, 0.22)');
+    glow.addColorStop(1, 'rgba(255, 209, 102, 0)');
+    g.fillStyle = glow;
+    g.fillRect(340, 0, 600, 420);
+    titleText('NOVA RESTORED', 190, 72, PALETTE.gold, PALETTE.gold);
+    g.textAlign = 'center';
+    g.fillStyle = PALETTE.muted;
+    g.font = `italic 600 22px ${FONT}`;
+    g.fillText('All ten waves cleared — the dying light burns again.', FIELD.width / 2, 252);
+
+    panel(430, 300, 420, 190);
+    g.fillStyle = PALETTE.muted;
+    g.font = `600 15px ${FONT}`;
+    g.fillText('FINAL SCORE', FIELD.width / 2, 336);
+    g.fillStyle = PALETTE.text;
+    g.font = `bold 52px ${FONT}`;
+    g.shadowColor = PALETTE.gold;
+    g.shadowBlur = 16;
+    g.fillText(String(state.score), FIELD.width / 2, 388);
+    g.shadowBlur = 0;
+    g.fillStyle = state.score >= state.best && state.score > 0 ? PALETTE.gold : PALETTE.muted;
+    g.font = `bold 20px ${FONT}`;
+    const bestLine = state.score >= state.best && state.score > 0 ? `NEW BEST  ${state.best}` : `BEST  ${state.best}`;
+    g.fillText(bestLine, FIELD.width / 2, 436);
+    g.fillStyle = PALETTE.muted;
+    g.font = `600 17px ${FONT}`;
+    g.fillText('Cleared all 10 waves', FIELD.width / 2, 466);
+
+    const pulse = 0.65 + 0.35 * Math.sin(state.time * 3.2);
+    g.globalAlpha = pulse;
+    g.fillStyle = PALETTE.text;
+    g.font = `bold 24px ${FONT}`;
+    g.fillText('press R to fly again', FIELD.width / 2, 560);
+    g.globalAlpha = 1;
   }
 
   function drawGameOver(state) {
@@ -360,18 +450,21 @@ export function createRenderer(canvas) {
     const px = state.particles ? state.particles.shakeX : 0;
     const py = state.particles ? state.particles.shakeY : 0;
     g.translate(px, py);
-    if (drawWorld) drawWorld(g);
+    // On victory the field has cleared: starfield and glow only, so the
+    // win screen reads clean with no stray bolts or popups over it.
+    if (drawWorld && screen !== SCREEN.VICTORY) drawWorld(g);
     if (state.particles) state.particles.draw(g);
     g.restore();
 
-    if (screen === SCREEN.PLAYING || screen === SCREEN.WAVE_CLEAR || screen === SCREEN.PAUSED) {
+    if (screen === SCREEN.PLAYING || screen === SCREEN.UPGRADE || screen === SCREEN.PAUSED) {
       drawHUD(state);
     }
     if (screen === SCREEN.TITLE) drawTitle(state, best);
     else if (screen === SCREEN.PAUSED) drawPaused();
-    else if (screen === SCREEN.WAVE_CLEAR) drawWaveClear(state);
+    else if (screen === SCREEN.UPGRADE) drawUpgrade(state);
+    else if (screen === SCREEN.VICTORY) drawVictory(state);
     else if (screen === SCREEN.GAME_OVER) drawGameOver(state);
   }
 
-  return { draw };
+  return { draw, upgradeCardRects };
 }
